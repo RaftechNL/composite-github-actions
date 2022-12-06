@@ -1,6 +1,11 @@
 name: aws-container-build-ecr
 description: "Builds the container"
 inputs:
+  metadata-flavor:
+    description: "Tags to use for the image"
+    required: false
+    default: |
+      latest=false    
   metadata-tags:
     description: "Tags to use for the image"
     required: false
@@ -70,7 +75,7 @@ runs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
       with:
-        registry-type: ${{ inputs.ecr-repository-type }}
+        registry-type: ${{ inputs.ecr-registry-type }}
 
     - name: "docker:setup-metadata"
       id: metadata
