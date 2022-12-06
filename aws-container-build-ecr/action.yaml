@@ -1,0 +1,92 @@
+name: aws-container-build-ecr
+description: "Builds the container"
+inputs:
+  metadata-tags:
+    description: "Tags to use for the image"
+    required: false
+    default: |
+      type=semver,pattern={{version}}
+      type=semver,pattern={{major}}.{{minor}}
+      type=sha
+  build-cache:
+    description: "Enable build cache"
+    required: false
+    default: "false"
+  build-cache-repository:
+    description: "Docker repository to use for the build cache"
+    required: false
+    default: ""
+  build-dockerfile:
+    description: "Dockerfile to use for the build"
+    required: false
+    default: "./Dockerfile"
+  build-context:
+    description: "Specify the context for the dockerfile to use"
+    required: false
+    default: "./"
+  build-args:
+    description: "Specify the build arguments to use"
+    required: false
+    default: ""
+  ecr-repository:
+    description: "ECR repository name"
+    required: true
+  ecr-registry-type:
+    description: "ECR repository type"
+    required: false
+    default: "private"
+  role-to-assume:
+    description: "AWS Assume Role ARN"
+    required: true
+  role-session-name:
+    description: "Assume role session name"
+    required: true
+  aws-region:
+    description: "AWS Region"
+    required: true
+outputs:
+  image-tag:
+    description: "Resulting image tag"
+    value: ${{ steps.image-details.outputs.tag }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: "cicd:inject-slug-variables"
+      uses: rlespinasse/github-slug-action@v4
+      with:
+        prefix: CI_
+
+    - name: "aws:configure-credentials"
+      uses: aws-actions/configure-aws-credentials@v1
+      id: aws-credentials
+      with:
+        role-to-assume: ${{ inputs.role-to-assume }}
+        role-session-name: ${{ inputs.role-session-name }}
+        aws-region: ${{ inputs.aws-region }}
+        mask-aws-account-id: no
+
+    - name: "aws:login-to-ecr"
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+      with:
+        registry-type: ${{ inputs.ecr-repository-type }}
+
+    - name: "docker:setup-metadata"
+      id: metadata
+      uses: docker/metadata-action@v4.1.1
+      with:
+        images: ${{ steps.login-ecr.outputs.registry }}/${{ inputs.ecr-repository }} # 12321321321312.dkr.ecr.eu-west-1.amazonaws.com/name-of-github-repository
+        flavor: ${{ inputs.metadata-flavor }}
+        tags: ${{ inputs.metadata-tags }}
+
+    - name: "kaniko:build-and-push-image"
+      uses: int128/kaniko-action@v1.14.0
+      with:
+        tags: ${{ steps.metadata.outputs.tags }}
+        labels: ${{ steps.metadata.outputs.labels }}
+        cache: ${{ inputs.build-cache }}
+        cache-repository: ${{ inputs.build-cache-repository }}
+        file: ${{ inputs.build-dockerfile }}
+        context: ${{ inputs.build-context }}
+        build-args: ${{ inputs.build-args }}
